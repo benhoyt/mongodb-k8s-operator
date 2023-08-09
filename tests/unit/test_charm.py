@@ -706,7 +706,7 @@ class TestCharm(unittest.TestCase):
         """NOTE: currently ops.testing seems to allow for non-leader to set secrets too!"""
         secret_id = self.harness.charm.set_secret(scope, "new-secret", "bla")
 
-        secret = self.harness.charm.model.get_secret(id=secret_id)
+        secret = self.harness.charm.model.get_secret(id=secret_id, label=f"{scope}_secret")
 
         event = mock.Mock()
         event.secret = secret

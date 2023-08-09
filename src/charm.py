@@ -283,26 +283,6 @@ class MongoDBCharm(CharmBase):
     def _peer_data(self, scope: Scopes):
         return self.relation.data[self._scope_opj(scope)]
 
-    @staticmethod
-    def _compare_secret_ids(secret_id1: str, secret_id2: str) -> bool:
-        """Reliable comparison on secret equality.
-
-        NOTE: Secret IDs may be of any of these forms:
-         - secret://9663a790-7828-4186-8b21-2624c58b6cfe/citb87nubg2s766pab40
-         - secret:citb87nubg2s766pab40
-        """
-        if not secret_id1 or not secret_id2:
-            return False
-
-        regex = re.compile(".*[^/][/:]")
-
-        pure_id1 = regex.sub("", secret_id1)
-        pure_id2 = regex.sub("", secret_id2)
-
-        if pure_id1 and pure_id2:
-            return pure_id1 == pure_id2
-        return False
-
     # END: generic helper methods
 
     # BEGIN: charm events
@@ -564,13 +544,9 @@ class MongoDBCharm(CharmBase):
         for backup tool on non-leader units to keep them working with MongoDB. The same workflow
         occurs on TLS certs change.
         """
-        if self._compare_secret_ids(
-            event.secret.id, self.app_peer_data.get(Config.Secrets.SECRET_INTERNAL_LABEL)
-        ):
+        if event.secret.label == f"{APP_SCOPE}_{Config.Secrets.SECRET_LABEL}":
             scope = APP_SCOPE
-        elif self._compare_secret_ids(
-            event.secret.id, self.unit_peer_data.get(Config.Secrets.SECRET_INTERNAL_LABEL)
-        ):
+        elif event.secret.label == f"{UNIT_SCOPE}_{Config.Secrets.SECRET_LABEL}":
             scope = UNIT_SCOPE
         else:
             logging.debug("Secret %s changed, but it's unknown", event.secret.id)
@@ -821,7 +797,8 @@ class MongoDBCharm(CharmBase):
         if Config.Secrets.SECRET_CACHE_LABEL not in self.secrets[scope]:
             try:
                 # NOTE: Secret contents are not yet available!
-                secret = self.model.get_secret(id=peer_data[Config.Secrets.SECRET_INTERNAL_LABEL])
+                secret = self.model.get_secret(id=peer_data[Config.Secrets.SECRET_INTERNAL_LABEL],
+                                               label=f"{scope}_Config.Secrets.SECRET_LABEL")
             except SecretNotFoundError as e:
                 logging.debug(
                     f"No secret found for ID {peer_data[Config.Secrets.SECRET_INTERNAL_LABEL]}, {e}"
@@ -893,7 +870,7 @@ class MongoDBCharm(CharmBase):
         else:
             scope_obj = self._scope_opj(scope)
 
-            secret = scope_obj.add_secret({key: value})
+            secret = scope_obj.add_secret({key: value}, label=f"{scope}_{Config.Secrets.SECRET_LABEL}")
             if not secret:
                 raise SecretNotAddedError(f"Couldn't set secret {scope}:{key}")
 
